@@ -4,11 +4,17 @@
   "description": "App de Gestión de Ventas Local (PWA)",
   "main": "service-worker.js",
   "scripts": {
-    "build": "echo 'Proyecto estático: no se requiere compilación (build)'", 
-    "ionic:build": "npm run build", 
+    "build": "echo 'Proyecto estático: no se requiere compilación (build)'",
+    "ionic:build": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["ionic", "cordova", "pwa", "sales", "gist"],
+  "keywords": [
+    "ionic",
+    "cordova",
+    "pwa",
+    "sales",
+    "gist"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
@@ -20,5 +26,18 @@
     "cordova-plugin-ionic-webview": "^5.0.0",
     "cordova-plugin-splashscreen": "5.0.2",
     "cordova-plugin-statusbar": "^2.4.2"
+  },
+  "dependencies": {},
+  "cordova": {
+    "plugins": {
+      "cordova-plugin-statusbar": {},
+      "cordova-plugin-device": {},
+      "cordova-plugin-splashscreen": {},
+      "cordova-plugin-ionic-webview": {},
+      "cordova-plugin-ionic-keyboard": {}
+    },
+    "platforms": [
+      "android"
+    ]
   }
 }
