@@ -1,6 +1,8 @@
 {
   "name": "app3",
-  "integrations": {},
+  "integrations": {
+    "cordova": {}
+  },
   "type": "custom",
   "id": "68c2821e"
 }

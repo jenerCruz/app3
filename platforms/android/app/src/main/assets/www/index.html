@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Ventas y Metas | App Local PWA</title>
+    <!-- Carga de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 1. REFERENCIA AL MANIFEST (Generado como blob en JS) -->
+    <link rel="manifest" href="/manifest.webmanifest">
+
+    <!-- Configuración de fuentes y colores de Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#4F46E5', // Indigo-600
+                        'secondary': '#10B981', // Emerald-500
+                        'accent': '#F59E0B', // Amber-500
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <!-- Incluir iconos de Lucide -->
+    <script type="module">
+        import { createIcons, Home, Target, TrendingUp, Users, Settings, Plus, Save, Trash2, Edit, Check, X } from 'https://unpkg.com/lucide@latest';
+        window.icons = { Home, Target, TrendingUp, Users, Settings, Plus, Save, Trash2, Edit, Check, X };
+        window.createIcons = createIcons;
+    </script>
+    <style>
+        /* Estilos generales para asegurar la accesibilidad y el diseño responsive */
+        body {
+            background-color: #f3f4f6; /* Gray-100 */
+        }
+        .container-app {
+            max-width: 100vw;
+            min-height: 100vh;
+            padding-bottom: 72px; /* Espacio para la barra de navegación inferior */
+        }
+        /* Estilo para la barra de navegación fija en la parte inferior (mobile-first) */
+        #nav-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            background-color: white;
+            box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 4px;
+            cursor: pointer;
+            transition: color 0.2s, background-color 0.2s;
+        }
+        .nav-item.active {
+            color: #4F46E5; /* primary */
+        }
+        /* Estilo para los formularios modales */
+        .modal {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        .modal-content {
+            transform: translateY(20px);
+            transition: transform 0.3s ease-in-out;
+        }
+        .modal.open .modal-content {
+            transform: translateY(0);
+        }
+        /* Estilos para el scroll en tablas */
+        .table-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
+</head>
+<body class="font-sans">
+
+    <!-- Contenedor Principal de la Aplicación -->
+    <div id="app" class="container-app mx-auto p-4 md:p-6">
+        <header class="mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 text-center md:text-left">Gestión de Ventas Local</h1>
+            <p class="text-gray-600 text-center md:text-left">Seguimiento de Metas y Productividad</p>
+        </header>
+
+        <!-- Contenido Dinámico de la Vista -->
+        <main id="content" class="bg-white p-4 rounded-xl shadow-lg"></main>
+
+        <!-- Componente de Mensajes (Modales/Alerta) -->
+        <div id="message-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible" onclick="app.closeModal()">
+            <div class="modal-content bg-white p-6 rounded-lg shadow-2xl w-full max-w-sm" onclick="event.stopPropagation()">
+                <h3 id="message-title" class="text-xl font-semibold text-gray-800 mb-3"></h3>
+                <p id="message-body" class="text-gray-600 mb-6"></p>
+                <div class="flex justify-end">
+                    <button onclick="app.closeModal()" class="px-4 py-2 bg-primary text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-150">Aceptar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Componente de Carga -->
+        <div id="loading-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 opacity-0 invisible transition duration-300">
+            <div class="flex flex-col items-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                <p class="mt-4 text-white text-lg">Sincronizando...</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Barra de Navegación Inferior (Mobile-First) -->
+    <nav id="nav-bar" class="flex justify-around">
+        <div class="nav-item active" data-view="dashboard" onclick="app.renderView('dashboard')">
+            <i data-lucide="home" class="w-5 h-5"></i>
+            <span class="text-xs mt-1">Tablero</span>
+        </div>
+        <div class="nav-item" data-view="goals" onclick="app.renderView('goals')">
+            <i data-lucide="target" class="w-5 h-5"></i>
+            <span class="text-xs mt-1">Metas</span>
+        </div>
+        <div class="nav-item" data-view="sales" onclick="app.renderView('sales')">
+            <i data-lucide="trending-up" class="w-5 h-5"></i>
+            <span class="text-xs mt-1">Ventas</span>
+        </div>
+        <div class="nav-item" data-view="productivity" onclick="app.renderView('productivity')">
+            <i data-lucide="users" class="w-5 h-5"></i>
+            <span class="text-xs mt-1">Productividad</span>
+        </div>
+        <div class="nav-item" data-view="settings" onclick="app.renderView('settings')">
+            <i data-lucide="settings" class="w-5 h-5"></i>
+            <span class="text-xs mt-1">Config</span>
+        </div>
+    </nav>
+
+    <script type="module">
+        // ===================================================================
+        // 2. REGISTRO DEL SERVICE WORKER (PWA - OFFLINE)
+        // ===================================================================
+
+        // URL de los recursos críticos a cachear para el modo offline
+        const CACHE_NAME = 'sales-app-v1';
+        const CRITICAL_ASSETS = [
+            'https://cdn.tailwindcss.com',
+            'https://unpkg.com/lucide@latest',
+            // La URL de este mismo archivo se incluye automáticamente
+        ];
+
+                // 2.1. Lógica del Service Worker (CORREGIDA)
+        const serviceWorkerScript = `
+            const CACHE_NAME = 'sales-app-v1';
+            const CRITICAL_ASSETS = ${JSON.stringify(CRITICAL_ASSETS)};
+            const MANIFEST_DATA = ${JSON.stringify(manifestData)};
+            const MANIFEST_URL = '/manifest.webmanifest';
+
+            self.addEventListener('install', (event) => {
+                self.skipWaiting();
+                event.waitUntil(
+                    caches.open(CACHE_NAME)
+                        .then((cache) => {
+                            return cache.addAll(['./', ...CRITICAL_ASSETS]);
+                        })
+                        .then(() => console.log('Service Worker: Caché de activos críticos guardada.'))
+                        .catch((error) => console.error('Service Worker: Fallo al cachear activos:', error))
+                );
+            });
+
+            self.addEventListener('activate', (event) => {
+                event.waitUntil(
+                    caches.keys().then((cacheNames) => {
+                        return Promise.all(
+                            cacheNames.filter((cacheName) => cacheName !== CACHE_NAME)
+                                .map((cacheName) => caches.delete(cacheName))
+                        );
+                    }).then(() => {
+                        console.log('Service Worker: Cachés antiguas eliminadas. Nuevo SW activado.');
+                        return self.clients.claim();
+                    })
+                );
+            });
+
+            self.addEventListener('fetch', (event) => {
+                // 1. Interceptar la solicitud del manifiesto
+                if (event.request.url.endsWith(MANIFEST_URL)) {
+                    event.respondWith(
+                        new Response(JSON.stringify(MANIFEST_DATA), {
+                            headers: { 'Content-Type': 'application/manifest+json' }
+                        })
+                    );
+                    return;
+                }
+                
+                // 2. Estrategia: Cache, luego Network (para activos estáticos)
+                event.respondWith(
+                    caches.match(event.request)
+                        .then((response) => {
+                            if (response) {
+                                return response;
+                            }
+                            return fetch(event.request).then((networkResponse) => {
+                                return caches.open(CACHE_NAME).then(cache => {
+                                    if (networkResponse.status === 200 && event.request.method === 'GET') {
+                                        cache.put(event.request, networkResponse.clone());
+                                    }
+                                    return networkResponse;
+                                });
+                            }).catch(() => {
+                                console.log('Service Worker: Falló la red y el recurso no está en caché.');
+                            });
+                        })
+                );
+            });
+        `;
+
+
+        // 2.2. Lógica para Registrar el Service Worker
+        if ('serviceWorker' in navigator) {
+            try {
+                // Crear un Blob del script del Service Worker para ejecutarlo inmediatamente
+                const swBlob = new Blob([serviceWorkerScript], { type: 'application/javascript' });
+                const swUrl = URL.createObjectURL(swBlob);
+
+                navigator.serviceWorker.register(swUrl)
+                    .then((reg) => {
+                        console.log('Service Worker registrado con éxito. Scope: ' + reg.scope);
+                    })
+                    .catch((error) => {
+                        console.error('Fallo al registrar el Service Worker:', error);
+                    });
+            } catch (error) {
+                 console.error('Error al crear el Service Worker Blob:', error);
+            }
+        }
+
+        // 2.3. Lógica para crear y registrar el Manifest
+        const manifestData = {
+            name: "Gestión de Ventas",
+            short_name: "VentasApp",
+            description: "App Local de Seguimiento de Metas y Ventas.",
+            start_url: "./",
+            display: "standalone",
+            background_color: "#f3f4f6",
+            theme_color: "#4F46E5",
+            orientation: "portrait",
+            icons: [
+                {
+                    src: "https://placehold.co/192x192/4F46E5/ffffff?text=V",
+                    sizes: "192x192",
+                    type: "image/png"
+                },
+                {
+                    src: "https://placehold.co/512x512/4F46E5/ffffff?text=V",
+                    sizes: "512x512",
+                    type: "image/png"
+                }
+            ]
+        };
+
+        // El navegador busca el archivo manifest.webmanifest. Aquí interceptamos esa solicitud.
+        // Nota: Esto solo funciona si el código se ejecuta en un entorno que soporta
+        // la intercepción de archivos como `/manifest.webmanifest`.
+        // En este entorno (Canvas), para asegurar que el manifiesto se cargue,
+        // necesitamos confiar en el Service Worker para servirlo, pero la forma más
+        // limpia en un solo archivo es confiar en que el navegador pueda interpretar
+        // una referencia a un archivo virtual.
+        // En una implementación real, el Service Worker serviría este JSON.
+        // Aquí, simplemente definimos los datos del manifest.
+
+        // ===================================================================
+        // 3. CÓDIGO DE LA APLICACIÓN (IDB + GIST SYNC)
+        // [CÓDIGO ANTERIORMENTE GENERADO EN EL PUNTO 1. CONSTANTES EN ADELANTE]
+        // ===================================================================
+
+        // ===================================================================
+        // 3. CONSTANTES Y UTILIDADES GLOBALES
+        // ===================================================================
+
+        const DB_NAME = 'SalesDB';
+        const DB_VERSION = 1;
+        const STORE_NAMES = ['config', 'branches', 'promoters', 'goals', 'sales'];
+
+        const PRODUCTS = ['amigo kit', 'chip cero', 'chip expréss', 'portabilidad', 'boletín 63'];
+        const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+        const API_KEY = "" // No se requiere para Gist (solo Token)
+        const GITHUB_API = "https://api.github.com/gists/";
+
+        /**
+         * Wrapper para la lógica de la aplicación, navegación, DB y sincronización.
+         */
+        class SalesApp {
+            constructor() {
+                this.db = null;
+                this.elements = {
+                    content: document.getElementById('content'),
+                    navBar: document.getElementById('nav-bar'),
+                    messageModal: document.getElementById('message-modal'),
+                    loadingOverlay: document.getElementById('loading-overlay')
+                };
+                this.state = {
+                    currentView: 'dashboard',
+                    gistId: '',
+                    gistToken: '',
+                    isReady: false
+                };
+            }
+
+            // ===================================================================
+            // 4. UTILIDADES DE UI
+            // ===================================================================
+
+            /** Muestra el modal de mensaje/alerta */
+            showMessage(title, body) {
+                document.getElementById('message-title').textContent = title;
+                document.getElementById('message-body').innerHTML = body; // Usar innerHTML para permitir el formulario
+                this.elements.messageModal.classList.add('open', 'opacity-100', 'visible');
+            }
+
+            /** Cierra el modal de mensaje */
+            closeModal() {
+                this.elements.messageModal.classList.remove('open', 'opacity-100', 'visible');
+            }
+
+            /** Muestra/Oculta el overlay de carga */
+            setLoading(isLoading) {
+                if (isLoading) {
+                    this.elements.loadingOverlay.classList.remove('opacity-0', 'invisible');
+                    this.elements.loadingOverlay.classList.add('opacity-100', 'visible');
+                } else {
+                    this.elements.loadingOverlay.classList.remove('opacity-100', 'visible');
+                    this.elements.loadingOverlay.classList.add('opacity-0', 'invisible');
+                }
+            }
+
+            /** Navegación y renderizado de vistas */
+            renderView(viewName) {
+                if (!this.state.isReady) return;
+
+                this.state.currentView = viewName;
+
+                // 1. Actualizar barra de navegación
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    if (item.getAttribute('data-view') === viewName) {
+                        item.classList.add('active');
+                    } else {
+                        item.classList.remove('active');
+                    }
+                });
+
+                // 2. Renderizar contenido
+                this.elements.content.innerHTML = `<h2 class="text-2xl font-semibold text-gray-700 mb-4">${this.getViewTitle(viewName)}</h2><div id="view-container"></div>`;
+                const container = document.getElementById('view-container');
+
+                switch (viewName) {
+                    case 'dashboard':
+                        this.renderDashboard(container);
+                        break;
+                    case 'goals':
+                        this.renderGoals(container);
+                        break;
+                    case 'sales':
+                        this.renderSales(container);
+                        break;
+                    case 'productivity':
+                        this.renderProductivity(container);
+                        break;
+                    case 'settings':
+                        this.renderSettings(container);
+                        break;
+                }
+                // 3. Re-renderizar íconos de Lucide
+                window.createIcons();
+            }
+
+            getViewTitle(viewName) {
+                const titles = {
+                    dashboard: 'Tablero de Avance de Metas',
+                    goals: 'Metas de Venta Mensuales',
+                    sales: 'Registro de Ventas Diarias',
+                    productivity: 'Productividad de Promotores',
+                    settings: 'Configuración y Sincronización'
+                };
+                return titles[viewName] || 'Vista Desconocida';
+            }
+
+
+            // ===================================================================
+            // 5. INDEXEDDB WRAPPER
+            // ===================================================================
+
+            /** Inicializa la base de datos IndexedDB */
+            initDB() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+                    request.onerror = (event) => {
+                        console.error("Error al abrir IndexedDB:", event.target.errorCode);
+                        this.showMessage("Error Crítico", "No se pudo inicializar la base de datos local. La aplicación no puede funcionar.");
+                        reject(event.target.error);
+                    };
+
+                    request.onsuccess = (event) => {
+                        this.db = event.target.result;
+                        resolve(this.db);
+                    };
+
+                    // Esta función solo corre si la DB se crea por primera vez o si la versión es mayor.
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        STORE_NAMES.forEach(storeName => {
+                            if (!db.objectStoreNames.contains(storeName)) {
+                                db.createObjectStore(storeName, { keyPath: 'id', autoIncrement: false });
+                            }
+                        });
+                    };
+                });
+            }
+
+            /** CRUD: Guardar o actualizar un objeto */
+            async save(storeName, data) {
+                return new Promise((resolve, reject) => {
+                    const isNew = !data.id;
+                    if (isNew) {
+                        data.id = crypto.randomUUID();
+                        data.createdAt = Date.now();
+                    } else {
+                        data.updatedAt = Date.now();
+                    }
+
+                    const transaction = this.db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+
+                    const request = isNew ? store.add(data) : store.put(data);
+
+                    request.onsuccess = () => resolve(data.id);
+                    request.onerror = (event) => {
+                        console.error(`Error saving data in ${storeName}:`, event.target.error);
+                        reject(event.target.error);
+                    };
+                });
+            }
+
+            /** CRUD: Obtener todos los objetos de un almacén */
+            async getAll(storeName) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readonly');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.getAll();
+
+                    request.onsuccess = (event) => resolve(event.target.result);
+                    request.onerror = (event) => {
+                        console.error(`Error getting all data from ${storeName}:`, event.target.error);
+                        reject(event.target.error);
+                    };
+                });
+            }
+
+            /** CRUD: Eliminar un objeto por ID */
+            async delete(storeName, id) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.delete(id);
+
+                    request.onsuccess = () => resolve();
+                    request.onerror = (event) => {
+                        console.error(`Error deleting data from ${storeName}:`, event.target.error);
+                        reject(event.target.error);
+                    };
+                });
+            }
+
+            /** CRUD: Reemplazar todo el contenido de un almacén (para sincronización) */
+            async replaceAll(storeName, dataArray) {
+                return new Promise(async (resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+
+                    try {
+                        // 1. Borrar todos los datos existentes
+                        await new Promise((res, rej) => {
+                            const clearRequest = store.clear();
+                            clearRequest.onsuccess = res;
+                            clearRequest.onerror = (e) => rej(`Error clearing store ${storeName}: ${e.target.error}`);
+                        });
+
+                        // 2. Añadir los nuevos datos
+                        for (const data of dataArray) {
+                            await new Promise((res, rej) => {
+                                // Asegurar que cada objeto tiene 'id' para put/add
+                                if (!data.id) data.id = crypto.randomUUID();
+                                const addRequest = store.add(data);
+                                addRequest.onsuccess = res;
+                                addRequest.onerror = (e) => rej(`Error adding data to ${storeName}: ${e.target.error}`);
+                            });
+                        }
+
+                        transaction.oncomplete = () => resolve();
+                        transaction.onerror = (e) => reject(`Transaction error for ${storeName}: ${e.target.error}`);
+
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            }
+
+
+            // ===================================================================
+            // 6. GIST SYNCHRONIZATION
+            // ===================================================================
+
+            /** Cargar Gist ID y Token desde la DB local */
+            async loadGistConfig() {
+                try {
+                    const config = await this.getAll('config');
+                    const gistId = config.find(c => c.id === 'gistId')?.value || '';
+                    const gistToken = config.find(c => c.id === 'gistToken')?.value || '';
+                    this.state.gistId = gistId;
+                    this.state.gistToken = gistToken;
+                } catch (e) {
+                    console.error("No se pudo cargar la configuración Gist.", e);
+                }
+            }
+
+            /** Guardar Gist ID y Token en la DB local */
+            async saveGistConfig(gistId, gistToken) {
+                await this.save('config', { id: 'gistId', value: gistId });
+                await this.save('config', { id: 'gistToken', value: gistToken });
+                this.state.gistId = gistId;
+                this.state.gistToken = gistToken;
+                this.showMessage("Configuración Guardada", "ID y Token de Gist guardados localmente.");
+                this.renderView('settings'); // Re-renderizar la vista de Configuración
+            }
+
+            /** Sincronizar (Descargar) datos desde Gist */
+            async syncFromGist() {
+                if (!this.state.gistId || !this.state.gistToken) {
+                    this.showMessage("Error de Sincronización", "Por favor, configure el ID del Gist y el Token de Acceso Personal de GitHub.");
+                    return;
+                }
+
+                this.setLoading(true);
+                try {
+                    const response = await fetch(`${GITHUB_API}${this.state.gistId}`, {
+                        headers: {
+                            'Authorization': `token ${this.state.gistToken}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`Error al obtener Gist: ${response.status} - ${errorData.message}`);
+                    }
+
+                    const gistData = await response.json();
+                    const file = gistData.files['ventas_data.json'];
+
+                    if (!file || !file.content) {
+                        throw new Error("El Gist no contiene el archivo 'ventas_data.json' o está vacío.");
+                    }
+
+                    const remoteData = JSON.parse(file.content);
+
+                    // Reemplazar datos locales con los datos remotos
+                    for (const storeName of ['branches', 'promoters', 'goals', 'sales']) {
+                        if (remoteData[storeName]) {
+                            await this.replaceAll(storeName, remoteData[storeName]);
+                        }
+                    }
+
+                    this.showMessage("Sincronización Exitosa", "Datos descargados y actualizados desde GitHub Gist.");
+
+                } catch (error) {
+                    console.error("Error en la sincronización de descarga:", error);
+                    this.showMessage("Error de Sincronización", `No se pudo descargar los datos: ${error.message}`);
+                } finally {
+                    this.setLoading(false);
+                    this.renderView(this.state.currentView); // Actualizar vista después de sincronizar
+                }
+            }
+
+            /** Sincronizar (Subir) datos hacia Gist */
+            async syncToGist() {
+                if (!this.state.gistId || !this.state.gistToken) {
+                    this.showMessage("Error de Sincronización", "Por favor, configure el ID del Gist y el Token de Acceso Personal de GitHub.");
+                    return;
+                }
+
+                this.setLoading(true);
+                try {
+                    // 1. Recolectar todos los datos locales
+                    const localData = {};
+                    for (const storeName of ['branches', 'promoters', 'goals', 'sales']) {
+                        localData[storeName] = await this.getAll(storeName);
+                    }
+
+                    // 2. Preparar el payload para Gist
+                    const payload = {
+                        description: "Datos de Gestión de Ventas Local",
+                        files: {
+                            'ventas_data.json': {
+                                content: JSON.stringify(localData, null, 2)
+                            }
+                        }
+                    };
+
+                    // 3. Subir/Actualizar a Gist (PATCH)
+                    const response = await fetch(`${GITHUB_API}${this.state.gistId}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Authorization': `token ${this.state.gistToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`Error al actualizar Gist: ${response.status} - ${errorData.message}`);
+                    }
+
+                    this.showMessage("Sincronización Exitosa", "Datos locales subidos a GitHub Gist correctamente.");
+
+                } catch (error) {
+                    console.error("Error en la sincronización de subida:", error);
+                    this.showMessage("Error de Sincronización", `No se pudo subir los datos: ${error.message}`);
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+
+            // ===================================================================
+            // 7. VISTA: CONFIGURACIÓN (CRUD Básico para Sucursales/Promotores)
+            // ===================================================================
+
+            renderSettings(container) {
+                // Configuración de Sincronización Gist
+                container.innerHTML = `
+                    <section class="mb-8 p-4 border rounded-lg bg-gray-50">
+                        <h3 class="text-xl font-semibold mb-3 text-primary">Sincronización GitHub Gist</h3>
+                        <p class="text-sm text-gray-600 mb-4">Ingrese su ID de Gist y un Token de Acceso Personal con permisos 'gist'.</p>
+                        <form id="gist-config-form" class="space-y-4">
+                            <div>
+                                <label for="gist-id" class="block text-sm font-medium text-gray-700">Gist ID</label>
+                                <input type="text" id="gist-id" placeholder="Ej: a1b2c3d4e5f67890..." required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                            </div>
+                            <div>
+                                <label for="gist-token" class="block text-sm font-medium text-gray-700">GitHub Personal Access Token</label>
+                                <input type="password" id="gist-token" placeholder="ghp_XXXXXXXXXXXXXXXXXXXX" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                            </div>
+                            <div class="flex space-x-4 pt-2">
+                                <button type="submit" class="flex-1 px-4 py-2 bg-secondary text-white font-medium rounded-lg hover:bg-emerald-600 transition duration-150 flex items-center justify-center">
+                                    <i data-lucide="save" class="w-5 h-5 mr-2"></i> Guardar Config
+                                </button>
+                                <button type="button" onclick="app.syncFromGist()" class="flex-1 px-4 py-2 bg-accent text-white font-medium rounded-lg hover:bg-amber-600 transition duration-150 flex items-center justify-center">
+                                    <i data-lucide="check" class="w-5 h-5 mr-2"></i> Descargar
+                                </button>
+                                <button type="button" onclick="app.syncToGist()" class="flex-1 px-4 py-2 bg-primary text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-150 flex items-center justify-center">
+                                    <i data-lucide="trending-up" class="w-5 h-5 mr-2"></i> Subir
+                                </button>
+                            </div>
+                        </form>
+                    </section>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <section>
+                            <h3 class="text-xl font-semibold mb-3 text-gray-700">Gestión de Sucursales</h3>
+                            <button onclick="app.showBranchForm()" class="mb-4 flex items-center px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-indigo-700 text-sm">
+                                <i data-lucide="plus" class="w-4 h-4 mr-1"></i> Agregar Sucursal
+                            </button>
+                            <div id="branches-list" class="space-y-2"></div>
+                        </section>
+                        <section>
+                            <h3 class="text-xl font-semibold mb-3 text-gray-700">Gestión de Promotores</h3>
+                            <button onclick="app.showPromoterForm()" class="mb-4 flex items-center px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-indigo-700 text-sm">
+                                <i data-lucide="plus" class="w-4 h-4 mr-1"></i> Agregar Promotor
+                            </button>
+                            <div id="promoters-list" class="space-y-2"></div>
+                        </section>
+                    </div>
+                `;
+
+                // Cargar valores de configuración Gist
+                document.getElementById('gist-id').value = this.state.gistId;
+                document.getElementById('gist-token').value = this.state.gistToken;
+
+                document.getElementById('gist-config-form').onsubmit = (e) => {
+                    e.preventDefault();
+                    const gistId = document.getElementById('gist-id').value.trim();
+                    const gistToken = document.getElementById('gist-token').value.trim();
+                    this.saveGistConfig(gistId, gistToken);
+                };
+
+                this.loadSettingsLists();
+                window.createIcons();
+            }
+
+            async loadSettingsLists() {
+                const branches = await this.getAll('branches');
+                const promoters = await this.getAll('promoters');
+
+                const branchListEl = document.getElementById('branches-list');
+                const promoterListEl = document.getElementById('promoters-list');
+
+                if (branchListEl) {
+                    branchListEl.innerHTML = branches.map(b => this.renderListItem('branches', b)).join('');
+                }
+
+                if (promoterListEl) {
+                    // Mapear promotores para incluir el nombre de la sucursal
+                    const branchMap = branches.reduce((acc, b) => { acc[b.id] = b.name; return acc; }, {});
+                    promoterListEl.innerHTML = promoters.map(p => {
+                        const branchName = branchMap[p.branchId] || 'Sin Sucursal';
+                        return this.renderListItem('promoters', { ...p, branchName });
+                    }).join('');
+                }
+
+                window.createIcons();
+            }
+
+            renderListItem(storeName, item) {
+                const nameDisplay = storeName === 'promoters' ? `${item.name} (${item.branchName})` : item.name;
+                return `
+                    <div id="${storeName}-${item.id}" class="flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
+                        <span class="text-gray-800 font-medium truncate">${nameDisplay}</span>
+                        <div class="flex space-x-2">
+                            <button onclick="app.showEditForm('${storeName}', '${item.id}')" class="text-primary hover:text-indigo-700 p-1 rounded-full bg-indigo-50 transition">
+                                <i data-lucide="edit" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="app.deleteItem('${storeName}', '${item.id}', true)" class="text-red-600 hover:text-red-800 p-1 rounded-full bg-red-50 transition">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            async showEditForm(storeName, id) {
+                if (storeName === 'branches') {
+                    this.showBranchForm(id);
+                } else if (storeName === 'promoters') {
+                    this.showPromoterForm(id);
+                }
+            }
+
+            async deleteItem(storeName, id, reload = false) {
+                const confirmDelete = confirm(`¿Está seguro de que desea eliminar este registro de ${storeName}?`);
+                if (confirmDelete) {
+                    try {
+                        await this.delete(storeName, id);
+                        this.showMessage("Eliminado", "Registro eliminado exitosamente.");
+                        if (reload) {
+                            this.loadSettingsLists(); // Recargar listas
+                            this.renderView(this.state.currentView); // Para recargar otras vistas afectadas
+                        }
+                    } catch (e) {
+                        this.showMessage("Error", "No se pudo eliminar el registro. Intente de nuevo.");
+                    }
+                }
+            }
+
+            async showBranchForm(id = null) {
+                const branches = await this.getAll('branches');
+                const branch = id ? branches.find(b => b.id === id) : { id: null, name: '' };
+                const title = id ? 'Editar Sucursal' : 'Agregar Nueva Sucursal';
+
+                const modalBody = `
+                    <form id="branch-form" class="space-y-4">
+                        <input type="hidden" id="branch-id" value="${branch.id || ''}">
+                        <div>
+                            <label for="branch-name" class="block text-sm font-medium text-gray-700">Nombre de la Sucursal</label>
+                            <input type="text" id="branch-name" value="${branch.name}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" onclick="app.closeModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800 transition">Cancelar</button>
+                            <button type="submit" class="px-4 py-2 bg-primary text-white font-medium rounded-lg hover:bg-indigo-700 transition flex items-center">
+                                <i data-lucide="save" class="w-5 h-5 mr-2"></i> Guardar
+                            </button>
+                        </div>
+                    </form>
+                `;
+                this.showMessage(title, modalBody);
+                window.createIcons();
+
+                document.getElementById('branch-form').onsubmit = async (e) => {
+                    e.preventDefault();
+                    const newId = document.getElementById('branch-id').value || null;
+                    const name = document.getElementById('branch-name').value.trim();
+                    if (!name) return this.showMessage("Error", "El nombre de la sucursal es obligatorio.");
+
+                    await this.save('branches', { id: newId, name });
+                    this.closeModal();
+                    this.showMessage("Guardado", `Sucursal ${name} guardada correctamente.`);
+                    this.loadSettingsLists();
+                    this.renderView(this.state.currentView);
+                };
+            }
+
+            async showPromoterForm(id = null) {
+                const branches = await this.getAll('branches');
+                const promoters = await this.getAll('promoters');
+                const promoter = id ? promoters.find(p => p.id === id) : { id: null, name: '', branchId: '' };
+
+                if (branches.length === 0) {
+                    return this.showMessage("Atención", "Debe registrar al menos una sucursal antes de agregar promotores.");
+                }
+
+                const title = id ? 'Editar Promotor' : 'Agregar Nuevo Promotor';
+                const branchOptions = branches.map(b => `<option value="${b.id}" ${promoter.branchId === b.id ? 'selected' : ''}>${b.name}</option>`).join('');
+
+                const modalBody = `
+                    <form id="promoter-form" class="space-y-4">
+                        <input type="hidden" id="promoter-id" value="${promoter.id || ''}">
+                        <div>
+                            <label for="promoter-name" class="block text-sm font-medium text-gray-700">Nombre del Promotor</label>
+                            <input type="text" id="promoter-name" value="${promoter.name}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        <div>
+                            <label for="promoter-branch" class="block text-sm font-medium text-gray-700">Asignar a Sucursal</label>
+                            <select id="promoter-branch" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                                <option value="">Seleccione Sucursal</option>
+                                ${branchOptions}
+                            </select>
+                        </div>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" onclick="app.closeModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800 transition">Cancelar</button>
+                            <button type="submit" class="px-4 py-2 bg-primary text-white font-medium rounded-lg hover:bg-indigo-700 transition flex items-center">
+                                <i data-lucide="save" class="w-5 h-5 mr-2"></i> Guardar
+                            </button>
+                        </div>
+                    </form>
+                `;
+                this.showMessage(title, modalBody);
+                window.createIcons();
+
+                document.getElementById('promoter-form').onsubmit = async (e) => {
+                    e.preventDefault();
+                    const newId = document.getElementById('promoter-id').value || null;
+                    const name = document.getElementById('promoter-name').value.trim();
+                    const branchId = document.getElementById('promoter-branch').value;
+
+                    if (!name || !branchId) return this.showMessage("Error", "Todos los campos son obligatorios.");
+
+                    await this.save('promoters', { id: newId, name, branchId });
+                    this.closeModal();
+                    this.showMessage("Guardado", `Promotor ${name} guardado correctamente.`);
+                    this.loadSettingsLists();
+                    this.renderView(this.state.currentView);
+                };
+            }
+
+
+            // ===================================================================
+            // 8. VISTA: METAS MENSUALES (Goals)
+            // ===================================================================
+
+            renderGoals(container) {
+                container.innerHTML = `
+                    <button onclick="app.showGoalForm()" class="mb-4 flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-indigo-700">
+                        <i data-lucide="plus" class="w-5 h-5 mr-2"></i> Registrar Nueva Meta Mensual
+                    </button>
+                    <h3 class="text-xl font-semibold mb-3 text-gray-700">Metas Registradas</h3>
+                    <div id="goals-list" class="table-scroll">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sucursal</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mes</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Meta (Unid.)</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="goals-tbody" class="bg-white divide-y divide-gray-200">
+                                <!-- Datos de metas se cargarán aquí -->
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                this.loadGoalsList();
+                window.createIcons();
+            }
+
+            async loadGoalsList() {
+                const goals = await this.getAll('goals');
+                const branches = await this.getAll('branches');
+                const branchMap = branches.reduce((acc, b) => { acc[b.id] = b.name; return acc; }, {});
+                const tbody = document.getElementById('goals-tbody');
+                if (!tbody) return;
+
+                tbody.innerHTML = goals.sort((a, b) => b.createdAt - a.createdAt).map(g => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${branchMap[g.branchId] || 'N/A'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${g.month}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${g.product}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${g.goal.toLocaleString()}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button onclick="app.showGoalForm('${g.id}')" class="text-primary hover:text-indigo-700 p-1">
+                                <i data-lucide="edit" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="app.deleteItem('goals', '${g.id}', true)" class="text-red-600 hover:text-red-800 p-1">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+                window.createIcons();
+            }
+
+            async showGoalForm(id = null) {
+                const branches = await this.getAll('branches');
+                const goals = await this.getAll('goals');
+                const goal = id ? goals.find(g => g.id === id) : { id: null, branchId: '', month: MONTHS[new Date().getMonth()], product: PRODUCTS[0], goal: '' };
+
+                if (branches.length === 0) {
+                    return this.showMessage("Atención", "Debe registrar al menos una sucursal en Configuración.");
+                }
+
+                const title = id ? 'Editar Meta Mensual' : 'Registrar Nueva Meta Mensual';
+                const branchOptions = branches.map(b => `<option value="${b.id}" ${goal.branchId === b.id ? 'selected' : ''}>${b.name}</option>`).join('');
+                const monthOptions = MONTHS.map(m => `<option value="${m}" ${goal.month === m ? 'selected' : ''}>${m}</option>`).join('');
+                const productOptions = PRODUCTS.map(p => `<option value="${p}" ${goal.product === p ? 'selected' : ''}>${p}</option>`).join('');
+
+                const modalBody = `
+                    <form id="goal-form" class="space-y-4">
+                        <input type="hidden" id="goal-id" value="${goal.id || ''}">
+                        <div>
+                            <label for="goal-branch" class="block text-sm font-medium text-gray-700">Sucursal</label>
+                            <select id="goal-branch" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">${branchOptions}</select>
+                        </div>
+                        <div>
+                            <label for="goal-month" class="block text-sm font-medium text-gray-700">Mes</label>
+                            <select id="goal-month" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">${monthOptions}</select>
+                        </div>
+                        <div>
+                            <label for="goal-product" class="block text-sm font-medium text-gray-700">Producto</label>
+                            <select id="goal-product" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">${productOptions}</select>
+                        </div>
+                        <div>
+                            <label for="goal-quantity" class="block text-sm font-medium text-gray-700">Cantidad Meta (Unidades)</label>
+                            <input type="number" id="goal-quantity" value="${goal.goal || ''}" min="1" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" onclick="app.closeModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800 transition">Cancelar</button>
+                            <button type="submit" class="px-4 py-2 bg-primary text-white font-medium rounded-lg hover:bg-indigo-700 transition flex items-center">
+                                <i data-lucide="save" class="w-5 h-5 mr-2"></i> Guardar Meta
+                            </button>
+                        </div>
+                    </form>
+                `;
+                this.showMessage(title, modalBody);
+                window.createIcons();
+
+                document.getElementById('goal-form').onsubmit = async (e) => {
+                    e.preventDefault();
+                    const newId = document.getElementById('goal-id').value || null;
+                    const data = {
+                        id: newId,
+                        branchId: document.getElementById('goal-branch').value,
+                        month: document.getElementById('goal-month').value,
+                        product: document.getElementById('goal-product').value,
+                        goal: parseInt(document.getElementById('goal-quantity').value, 10),
+                    };
+
+                    if (!data.branchId || !data.month || !data.product || isNaN(data.goal) || data.goal <= 0) {
+                        return this.showMessage("Error", "Todos los campos son obligatorios y la meta debe ser un número positivo.");
+                    }
+
+                    await this.save('goals', data);
+                    this.closeModal();
+                    this.showMessage("Guardado", `Meta registrada para ${data.product} en ${data.month}.`);
+                    this.loadGoalsList();
+                    this.renderView('dashboard');
+                };
+            }
+
+            // ===================================================================
+            // 9. VISTA: REGISTRO DE VENTAS DIARIAS (Sales)
+            // ===================================================================
+
+            renderSales(container) {
+                container.innerHTML = `
+                    <button onclick="app.showSaleForm()" class="mb-4 flex items-center px-4 py-2 bg-secondary text-white rounded-lg hover:bg-emerald-600">
+                        <i data-lucide="plus" class="w-5 h-5 mr-2"></i> Registrar Venta Diaria
+                    </button>
+                    <div class="mb-4 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                        <input type="date" id="sale-filter-date" class="p-2 border rounded-md w-full sm:w-auto">
+                        <select id="sale-filter-branch" class="p-2 border rounded-md w-full sm:w-auto"></select>
+                        <button onclick="app.loadSalesList()" class="px-3 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 text-sm">Filtrar</button>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3 text-gray-700">Ventas Registradas</h3>
+                    <div id="sales-list" class="table-scroll">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sucursal</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Promotor</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unidades</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sales-tbody" class="bg-white divide-y divide-gray-200">
+                                <!-- Datos de ventas se cargarán aquí -->
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                this.setupSalesFilters();
+            }
+
+            async setupSalesFilters() {
+                const branches = await this.getAll('branches');
+                const filterBranchEl = document.getElementById('sale-filter-branch');
+                if (!filterBranchEl) return;
+
+                filterBranchEl.innerHTML = `<option value="">Todas las Sucursales</option>` +
+                    branches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+
+                // Establecer fecha por defecto a hoy
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('sale-filter-date').value = today;
+
+                this.loadSalesList();
+            }
+
+            async loadSalesList() {
+                const allSales = await this.getAll('sales');
+                const branches = await this.getAll('branches');
+                const promoters = await this.getAll('promoters');
+
+                const branchMap = branches.reduce((acc, b) => { acc[b.id] = b.name; return acc; }, {});
+                const promoterMap = promoters.reduce((acc, p) => { acc[p.id] = p.name; return acc; }, {});
+
+                const filterDate = document.getElementById('sale-filter-date')?.value;
+                const filterBranchId = document.getElementById('sale-filter-branch')?.value;
+
+                const filteredSales = allSales
+                    .filter(s => {
+                        let match = true;
+                        if (filterDate) {
+                            match = match && s.date === filterDate;
+                        }
+                        if (filterBranchId) {
+                            match = match && s.branchId === filterBranchId;
+                        }
+                        return match;
+                    })
+                    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                const tbody = document.getElementById('sales-tbody');
+                if (!tbody) return;
+
+                tbody.innerHTML = filteredSales.map(s => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${s.date}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${branchMap[s.branchId] || 'N/A'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${promoterMap[s.promoterId] || 'N/A'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${s.product}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${s.quantity.toLocaleString()}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button onclick="app.showSaleForm('${s.id}')" class="text-primary hover:text-indigo-700 p-1">
+                                <i data-lucide="edit" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="app.deleteItem('sales', '${s.id}', true)" class="text-red-600 hover:text-red-800 p-1">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+                window.createIcons();
+            }
+
+            async showSaleForm(id = null) {
+                const branches = await this.getAll('branches');
+                const promoters = await this.getAll('promoters');
+                const sales = await this.getAll('sales');
+                const sale = id ? sales.find(s => s.id === id) : { id: null, branchId: '', promoterId: '', date: new Date().toISOString().split('T')[0], product: PRODUCTS[0], quantity: '' };
+
+                if (branches.length === 0 || promoters.length === 0) {
+                    return this.showMessage("Atención", "Debe registrar Sucursales y Promotores en Configuración antes de registrar ventas.");
+                }
+
+                const title = id ? 'Editar Venta Diaria' : 'Registrar Nueva Venta Diaria';
+                const branchOptions = branches.map(b => `<option value="${b.id}" ${sale.branchId === b.id ? 'selected' : ''}>${b.name}</option>`).join('');
+                const productOptions = PRODUCTS.map(p => `<option value="${p}" ${sale.product === p ? 'selected' : ''}>${p}</option>`).join('');
+
+                // Función auxiliar para generar opciones de promotores filtradas por sucursal
+                const getPromoterOptions = (selectedBranchId, selectedPromoterId) => {
+                    return promoters
+                        .filter(p => !selectedBranchId || p.branchId === selectedBranchId)
+                        .map(p => `<option value="${p.id}" ${selectedPromoterId === p.id ? 'selected' : ''}>${p.name}</option>`)
+                        .join('');
+                };
+
+                const modalBody = `
+                    <form id="sale-form" class="space-y-4">
+                        <input type="hidden" id="sale-id" value="${sale.id || ''}">
+                        <div>
+                            <label for="sale-date" class="block text-sm font-medium text-gray-700">Fecha de Venta</label>
+                            <input type="date" id="sale-date" value="${sale.date}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        <div>
+                            <label for="sale-branch" class="block text-sm font-medium text-gray-700">Sucursal</label>
+                            <select id="sale-branch" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">${branchOptions}</select>
+                        </div>
+                        <div>
+                            <label for="sale-promoter" class="block text-sm font-medium text-gray-700">Promotor</label>
+                            <select id="sale-promoter" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                                <option value="">Seleccione Promotor</option>
+                                ${getPromoterOptions(sale.branchId, sale.promoterId)}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="sale-product" class="block text-sm font-medium text-gray-700">Producto</label>
+                            <select id="sale-product" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">${productOptions}</select>
+                        </div>
+                        <div>
+                            <label for="sale-quantity" class="block text-sm font-medium text-gray-700">Unidades Vendidas</label>
+                            <input type="number" id="sale-quantity" value="${sale.quantity || ''}" min="1" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                        </div>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" onclick="app.closeModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800 transition">Cancelar</button>
+                            <button type="submit" class="px-4 py-2 bg-secondary text-white font-medium rounded-lg hover:bg-emerald-600 transition flex items-center">
+                                <i data-lucide="check" class="w-5 h-5 mr-2"></i> Registrar Venta
+                            </button>
+                        </div>
+                    </form>
+                `;
+                this.showMessage(title, modalBody);
+                window.createIcons();
+
+                const promoterSelect = document.getElementById('sale-promoter');
+                const branchSelect = document.getElementById('sale-branch');
+
+                // Lógica para filtrar promotores al cambiar sucursal
+                branchSelect.onchange = (e) => {
+                    promoterSelect.innerHTML = `<option value="">Seleccione Promotor</option>` + getPromoterOptions(e.target.value, '');
+                };
+
+
+                document.getElementById('sale-form').onsubmit = async (e) => {
+                    e.preventDefault();
+                    const newId = document.getElementById('sale-id').value || null;
+                    const data = {
+                        id: newId,
+                        date: document.getElementById('sale-date').value,
+                        branchId: document.getElementById('sale-branch').value,
+                        promoterId: document.getElementById('sale-promoter').value,
+                        product: document.getElementById('sale-product').value,
+                        quantity: parseInt(document.getElementById('sale-quantity').value, 10),
+                    };
+
+                    if (!data.date || !data.branchId || !data.promoterId || !data.product || isNaN(data.quantity) || data.quantity <= 0) {
+                        return this.showMessage("Error", "Todos los campos son obligatorios y la cantidad debe ser un número positivo.");
+                    }
+
+                    await this.save('sales', data);
+                    this.closeModal();
+                    this.showMessage("Guardado", `Venta de ${data.quantity} unidades registrada.`);
+                    this.loadSalesList();
+                    this.renderView('dashboard');
+                };
+            }
+
+            // ===================================================================
+            // 10. VISTA: PRODUCTIVIDAD (Productivity)
+            // ===================================================================
+
+            async renderProductivity(container) {
+                const branches = await this.getAll('branches');
+                const promoters = await this.getAll('promoters');
+                const sales = await this.getAll('sales');
+
+                // 1. Calcular Ventas Totales por Promotor
+                const promoterSales = sales.reduce((acc, sale) => {
+                    acc[sale.promoterId] = (acc[sale.promoterId] || 0) + sale.quantity;
+                    return acc;
+                }, {});
+
+                // 2. Mapear promotores a sucursal
+                const branchMap = branches.reduce((acc, b) => { acc[b.id] = b.name; return acc; }, {});
+                const productivityData = promoters.map(p => ({
+                    ...p,
+                    branchName: branchMap[p.branchId] || 'Sin Sucursal',
+                    totalSales: promoterSales[p.id] || 0,
+                })).sort((a, b) => b.totalSales - a.totalSales); // Ordenar por ventas
+
+                container.innerHTML = `
+                    <p class="mb-4 text-gray-600">Resumen de ventas por promotor en todas las sucursales.</p>
+                    <div class="table-scroll">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Promotor</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sucursal</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Unidades Vendidas</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                ${productivityData.map(p => `
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${p.name}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${p.branchName}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-lg font-semibold text-primary">${p.totalSales.toLocaleString()}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            // ===================================================================
+            // 11. VISTA: DASHBOARD (Dashboard)
+            // ===================================================================
+
+            async renderDashboard(container) {
+                const branches = await this.getAll('branches');
+                const goals = await this.getAll('goals');
+                const sales = await this.getAll('sales');
+
+                const currentMonthName = MONTHS[new Date().getMonth()];
+                const currentYear = new Date().getFullYear().toString();
+
+                container.innerHTML = `
+                    <div id="summary-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <!-- Tarjetas de resumen global se llenarán aquí -->
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3 text-gray-700">Avance de Metas por Producto (Global - ${currentMonthName} ${currentYear})</h3>
+                    <div id="product-progress" class="space-y-4 mb-6">
+                        <!-- Avance de metas por producto se llenará aquí -->
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3 text-gray-700">Avance de Metas por Sucursal (${currentMonthName} ${currentYear})</h3>
+                    <div id="branch-progress" class="space-y-4">
+                        <!-- Avance de metas por sucursal se llenará aquí -->
+                    </div>
+                `;
+
+                // Agregación de datos
+                const aggregation = this.aggregateSales(goals, sales, branches, currentMonthName);
+
+                // 1. Renderizar Tarjetas de Resumen Global
+                this.renderSummaryCards(aggregation, document.getElementById('summary-cards'));
+                // 2. Renderizar Progreso por Producto
+                this.renderProductProgress(aggregation, document.getElementById('product-progress'));
+                // 3. Renderizar Progreso por Sucursal
+                this.renderBranchProgress(aggregation, document.getElementById('branch-progress'));
+                window.createIcons();
+            }
+
+            aggregateSales(goals, sales, branches, currentMonthName) {
+                // Filtramos metas y ventas solo para el mes actual
+                const currentMonthGoals = goals.filter(g => g.month === currentMonthName);
+                const currentMonthSales = sales.filter(s => {
+                    const saleMonth = MONTHS[new Date(s.date).getMonth()];
+                    return saleMonth === currentMonthName;
+                });
+
+                // Inicializar estructuras de datos
+                const globalData = { totalGoal: 0, totalSales: 0 };
+                const productData = {};
+                const branchData = {};
+
+                // Inicializar datos por producto
+                PRODUCTS.forEach(p => productData[p] = { goal: 0, sales: 0 });
+
+                // Inicializar datos por sucursal
+                branches.forEach(b => branchData[b.id] = { name: b.name, totalGoal: 0, totalSales: 0, products: {} });
+
+                // Procesar Metas
+                currentMonthGoals.forEach(g => {
+                    // Global
+                    globalData.totalGoal += g.goal;
+                    // Por Producto
+                    productData[g.product].goal = (productData[g.product].goal || 0) + g.goal;
+                    // Por Sucursal
+                    branchData[g.branchId].totalGoal = (branchData[g.branchId].totalGoal || 0) + g.goal;
+                });
+
+                // Procesar Ventas
+                currentMonthSales.forEach(s => {
+                    // Global
+                    globalData.totalSales += s.quantity;
+                    // Por Producto
+                    if (productData[s.product]) {
+                        productData[s.product].sales = (productData[s.product].sales || 0) + s.quantity;
+                    }
+                    // Por Sucursal
+                    if (branchData[s.branchId]) {
+                        branchData[s.branchId].totalSales = (branchData[s.branchId].totalSales || 0) + s.quantity;
+                    }
+                });
+
+                return { globalData, productData, branchData };
+            }
+
+            renderSummaryCards(aggregation, container) {
+                const { globalData } = aggregation;
+                const progressPercent = globalData.totalGoal > 0 ? Math.round((globalData.totalSales / globalData.totalGoal) * 100) : (globalData.totalSales > 0 ? 100 : 0);
+                const progressColor = progressPercent >= 100 ? 'secondary' : (progressPercent >= 75 ? 'accent' : 'red-500');
+
+                const cards = [
+                    { title: "Meta Global Mensual", value: globalData.totalGoal.toLocaleString(), icon: "target", color: "primary" },
+                    { title: "Ventas Totales Mensuales", value: globalData.totalSales.toLocaleString(), icon: "trending-up", color: "secondary" },
+                    { title: "Avance Global (%)", value: `${progressPercent}%`, icon: "check", color: progressColor },
+                ];
+
+                container.innerHTML = cards.map(card => `
+                    <div class="bg-white p-4 rounded-xl shadow-md border-l-4 border-${card.color.replace(/-.*/, '')}-500">
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm font-medium text-gray-500">${card.title}</p>
+                            <i data-lucide="${card.icon}" class="w-6 h-6 text-${card.color.replace(/-.*/, '')}-500"></i>
+                        </div>
+                        <p class="mt-1 text-2xl font-bold text-gray-900">${card.value}</p>
+                    </div>
+                `).join('');
+            }
+
+            renderProductProgress(aggregation, container) {
+                const { productData } = aggregation;
+
+                container.innerHTML = Object.entries(productData).map(([product, data]) => {
+                    const goal = data.goal;
+                    const sales = data.sales;
+                    const progress = goal > 0 ? Math.round((sales / goal) * 100) : (sales > 0 ? 100 : 0);
+                    const barColor = progress >= 100 ? 'bg-secondary' : 'bg-primary';
+                    const safeProgress = Math.min(100, progress);
+
+                    return `
+                        <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="font-medium text-gray-800">${product.toUpperCase()}</span>
+                                <span class="text-sm font-semibold text-gray-700">${sales.toLocaleString()} / ${goal.toLocaleString()} (${progress}%)</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div class="h-3 rounded-full ${barColor}" style="width: ${safeProgress}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('') || '<p class="text-gray-500">No hay metas ni ventas registradas para el mes actual.</p>';
+            }
+
+            renderBranchProgress(aggregation, container) {
+                const { branchData } = aggregation;
+
+                container.innerHTML = Object.entries(branchData).map(([id, data]) => {
+                    const goal = data.totalGoal;
+                    const sales = data.totalSales;
+                    const progress = goal > 0 ? Math.round((sales / goal) * 100) : (sales > 0 ? 100 : 0);
+                    const barColor = progress >= 100 ? 'bg-secondary' : 'bg-primary';
+                    const safeProgress = Math.min(100, progress);
+
+                    return `
+                        <div class="p-4 bg-white rounded-xl shadow-sm border border-gray-200">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-lg font-bold text-primary">${data.name}</span>
+                                <span class="text-md font-semibold text-gray-700">${sales.toLocaleString()} / ${goal.toLocaleString()} (${progress}%)</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-4">
+                                <div class="h-4 rounded-full ${barColor}" style="width: ${safeProgress}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('') || '<p class="text-gray-500">No hay sucursales registradas o no hay datos de meta/venta para el mes.</p>';
+            }
+
+
+            // ===================================================================
+            // 12. INICIALIZACIÓN
+            // ===================================================================
+
+            async init() {
+                try {
+                    await this.initDB();
+                    await this.loadGistConfig();
+                    this.state.isReady = true;
+                    this.renderView('dashboard');
+                } catch (e) {
+                    this.showMessage("Fallo en Inicialización", "La aplicación no pudo cargar. Verifique la consola para detalles del error.");
+                    console.error("Initialization failed:", e);
+                }
+            }
+        }
+
+        // Inicializar la aplicación
+        const app = new SalesApp();
+        window.app = app; // Hacer la instancia accesible globalmente
+        app.init();
+    </script>
+<script type="module">
+  const app = new SalesApp();
+  window.app = app;
+
+  app.initDB()
+    .then(() => app.loadGistConfig())
+    .then(() => {
+      app.state.isReady = true;
+      app.renderView('dashboard');
+    })
+    .catch(err => {
+      console.error("Error al iniciar la app:", err);
+      app.showMessage("Error crítico", "No se pudo iniciar la aplicación.");
+    });
+</script>
+</body>
+</html>
+
