@@ -1,0 +1,12 @@
+name: Custom Agent Test
+on: workflow_dispatch
+jobs:
+  call-agent:
+      runs-on: ubuntu-latest
+          steps:
+                - name: Llamar al agente
+                        run: |
+                                  curl -X POST https://<tu-url>.github.dev/predict \
+                                              -H "Content-Type: application/json" \
+                                                          -H "x-api-key: ${{ secrets.MY_AGENT_KEY }} \
+                                                                      -d '{"text":"Revisa este commit"}'
